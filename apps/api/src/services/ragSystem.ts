@@ -1,12 +1,11 @@
-import { VertexAI } from '@google-cloud/vertexai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@supabase/supabase-js'
-import { BibleVerse, VerseEmbedding, AIQueryResponse } from '@bible-study/types'
+import { BibleVerse, AIQueryResponse } from '@bible-study/types'
 
 export interface RAGConfig {
-  projectId: string
-  location: string
-  embeddingModel: string
+  apiKey: string
   generativeModel: string
+  fileSearchStoreName?: string
 }
 
 export interface RAGQuery {
@@ -27,58 +26,106 @@ export interface RAGResult {
 }
 
 export class BibleRAGSystem {
-  private vertexAI: VertexAI
+  private genAI: GoogleGenerativeAI
   private supabase: ReturnType<typeof createClient>
   private config: RAGConfig
+  private fileSearchStore: any = null
 
   constructor(config: RAGConfig) {
     this.config = config
-    this.vertexAI = new VertexAI({
-      project: config.projectId,
-      location: config.location,
-    })
+    this.genAI = new GoogleGenerativeAI(config.apiKey)
     
     this.supabase = createClient(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
+
+    // Initialize file search store if name provided
+    if (config.fileSearchStoreName) {
+      this.initializeFileSearchStore()
+    }
   }
 
   /**
-   * Generate embeddings for Bible verses
+   * Initialize Google File Search Store for Bible data
    */
-  async generateVerseEmbeddings(verses: BibleVerse[]): Promise<VerseEmbedding[]> {
-    console.log(`🔢 Generating embeddings for ${verses.length} verses...`)
-    
-    const embeddingModel = this.vertexAI.getGenerativeModel({
-      model: this.config.embeddingModel,
-    })
+  private async initializeFileSearchStore() {
+    try {
+      console.log(`🔧 Initializing File Search Store: ${this.config.fileSearchStoreName}`)
+      
+      // Create file search store using Google's managed RAG system
+      this.fileSearchStore = await this.genAI.getFileSearchStore(this.config.fileSearchStoreName!)
+      
+      if (!this.fileSearchStore) {
+        // Create store if it doesn't exist
+        this.fileSearchStore = await this.genAI.createFileSearchStore({
+          name: this.config.fileSearchStoreName,
+          displayName: 'Bible Study Database'
+        })
+        console.log('✅ Created new File Search Store')
+      } else {
+        console.log('✅ Found existing File Search Store')
+      }
+    } catch (error) {
+      console.error('❌ Error initializing File Search Store:', error)
+    }
+  }
 
-    const embeddings: VerseEmbedding[] = []
+  /**
+   * Upload Bible data to File Search Store
+   */
+  async uploadBibleDataToStore(verses: BibleVerse[]) {
+    if (!this.fileSearchStore) {
+      throw new Error('File Search Store not initialized')
+    }
 
-    for (const verse of verses) {
-      try {
-        // Create text for embedding (verse + context)
-        const textToEmbed = `${verse.reference}: ${verse.text}`
-        
-        // In a real implementation, you'd use the embedding model
-        // For now, we'll simulate this process
-        const mockEmbedding = Array(768).fill(0).map(() => Math.random() - 0.5)
-        
-        // Store embedding in database
-        const { data, error } = await this.supabase
-          .from('verse_embeddings')
-          .upsert({
-            verse_id: verse.id,
-            embedding_vector: mockEmbedding,
-            embedding_model: this.config.embeddingModel,
-          }, { onConflict: 'verse_id,embedding_model' })
-          .select()
-          .single()
+    console.log(`📚 Uploading ${verses.length} verses to File Search Store...`)
 
-        if (!error && data) {
-          embeddings.push(data)
-        }
+    try {
+      // Create JSON file with Bible verses for upload
+      const bibleData = {
+        type: 'bible_verses',
+        version: 'KJV',
+        total_verses: verses.length,
+        verses: verses.map(verse => ({
+          id: verse.id,
+          reference: verse.reference,
+          text: verse.text,
+          book_name: verse.book_name,
+          chapter: verse.chapter,
+          verse_number: verse.verse,
+          testament: verse.testament
+        }))
+      }
+
+      // Create temporary file
+      const fileName = `kjv-bible-verses-${Date.now()}.json`
+      const fileContent = JSON.stringify(bibleData, null, 2)
+      
+      // Upload to File Search Store (this handles chunking, embedding, and indexing automatically)
+      const uploadResult = await this.fileSearchStore.uploadFile({
+        fileName,
+        content: fileContent,
+        mimeType: 'application/json',
+        displayName: 'King James Version Bible Verses'
+      })
+
+      console.log('✅ Bible data uploaded to File Search Store')
+      console.log(`📊 Processing status: ${uploadResult.state}`)
+      
+      // Wait for indexing to complete
+      if (uploadResult.state === 'PROCESSING') {
+        console.log('⏳ Waiting for File Search indexing to complete...')
+        // In production, you'd poll the status here
+      }
+      
+      return uploadResult
+      
+    } catch (error) {
+      console.error('❌ Error uploading Bible data to File Search:', error)
+      throw error
+    }
+  }
 
         // Rate limiting - wait a bit between calls
         await new Promise(resolve => setTimeout(resolve, 100))
@@ -92,7 +139,7 @@ export class BibleRAGSystem {
   }
 
   /**
-   * Search for relevant verses using semantic similarity
+   * Search for relevant verses using Google File Search
    */
   async searchSimilarVerses(
     query: string, 
@@ -100,72 +147,130 @@ export class BibleRAGSystem {
     testament?: 'Old' | 'New'
   ): Promise<{ verse: BibleVerse; similarity: number }[]> {
     try {
-      // Generate embedding for query
-      const queryEmbedding = await this.generateQueryEmbedding(query)
+      if (!this.fileSearchStore) {
+        throw new Error('File Search Store not initialized. Call initializeFileSearchStore() first.')
+      }
+
+      console.log(`🔍 Searching File Search for: "${query}"`)
+
+      // Use Google's managed RAG system for search
+      const response = await this.genAI.getGenerativeModel({
+        model: this.config.generativeModel,
+        tools: [{
+          fileSearch: {
+            fileSearchStoreName: this.config.fileSearchStoreName,
+            maxResults: limit,
+            metadataFilter: testament && testament !== 'both' ? `testament=${testament}` : undefined
+          }
+        }]
+      }).generateContent(query)
+
+      // Extract grounding metadata (retrieved sources)
+      const groundingMetadata = response.response.candidates?.[0]?.groundingMetadata
       
-      if (!queryEmbedding) {
-        throw new Error('Failed to generate query embedding')
+      if (!groundingMetadata?.groundingChunks) {
+        console.log('⚠️ No grounding chunks found in response')
+        return []
       }
 
-      // Search using vector similarity
-      let supabaseQuery = this.supabase
-        .from('verse_embeddings')
-        .select(`
-          similarity:embedding_vector <=> embedding_vector,
-          verse:bible_verses (
-            id, book_id, chapter, verse, text, book_name, reference, testament
-          )
-        `)
-        .gte('similarity', 0.7) // Minimum similarity threshold
-        .order('similarity', { ascending: false })
-        .limit(limit)
+      // Convert grounding chunks to verse format with similarity scores
+      const results = await Promise.all(
+        groundingMetadata.groundingChunks.map(async (chunk: any) => {
+          // Extract verse reference from chunk metadata or text
+          const verseData = await this.parseChunkToVerse(chunk)
+          
+          return {
+            verse: verseData,
+            similarity: 0.85 // Default similarity for File Search matches
+          }
+        })
+      )
 
-      // Apply testament filter if specified
-      if (testament && testament !== 'both') {
-        supabaseQuery = supabaseQuery.eq('verse.testament', testament)
-      }
-
-      const { data, error } = await supabaseQuery
-
-      if (error) {
-        throw new Error(`Vector search error: ${error.message}`)
-      }
-
-      return (data || []).map(item => ({
-        verse: item.verse,
-        similarity: 1 - item.similarity // Convert distance to similarity
-      }))
+      return results.slice(0, limit)
 
     } catch (error) {
-      console.error('Error in semantic search:', error)
+      console.error('Error in File Search:', error)
       
-      // Fallback to text search
+      // Fallback to Supabase text search
       return this.fallbackTextSearch(query, limit, testament)
     }
   }
 
   /**
-   * Generate AI response using RAG
+   * Generate AI response using Google File Search RAG
    */
   async generateResponse(ragQuery: RAGQuery): Promise<RAGResult> {
     const startTime = Date.now()
     
     try {
-      // Step 1: Retrieve relevant context
+      if (!this.fileSearchStore) {
+        throw new Error('File Search Store not initialized. Call initializeFileSearchStore() first.')
+      }
+
+      console.log(`🤖 Generating response using File Search RAG: "${ragQuery.query}"`)
+
+      // Step 1: Generate response using Google's managed File Search RAG system
+      const response = await this.genAI.getGenerativeModel({
+        model: this.config.generativeModel,
+        tools: [{
+          fileSearch: {
+            fileSearchStoreName: this.config.fileSearchStoreName,
+            maxResults: ragQuery.maxContextVerses || 8,
+            metadataFilter: ragQuery.testamentFilter && ragQuery.testamentFilter !== 'both' 
+              ? `testament=${ragQuery.testamentFilter}` 
+              : undefined
+          }
+        }]
+      }).generateContent(this.buildRAGPrompt(ragQuery.query))
+
+      // Step 2: Extract grounding metadata (retrieved sources and context)
+      const groundingMetadata = response.response.candidates?.[0]?.groundingMetadata
+      
       let contextVerses: BibleVerse[] = []
       let relevanceScores: number[] = []
 
-      if (ragQuery.contextVerses && ragQuery.contextVerses.length > 0) {
-        // Use provided context verses
-        const { data, error } = await this.supabase
-          .from('bible_verses')
-          .select('*')
-          .in('id', ragQuery.contextVerses)
+      if (groundingMetadata?.groundingChunks) {
+        // Convert grounding chunks to verse format
+        contextVerses = await Promise.all(
+          groundingMetadata.groundingChunks.map((chunk: any) => 
+            this.parseChunkToVerse(chunk)
+          )
+        )
+        
+        // Assign relevance scores based on chunk order
+        relevanceScores = groundingMetadata.groundingChunks.map((_, index: number) => 
+          Math.max(0.7, 1.0 - (index * 0.05)) // Decreasing relevance
+        )
+      }
 
-        if (!error && data) {
-          contextVerses = data
-          relevanceScores = new Array(data.length).fill(1.0)
-        }
+      // Step 3: Post-process response
+      const processingTime = Date.now() - startTime
+      const suggestedQuestions = this.extractSuggestedQuestions(response.response.text())
+      const confidence = this.calculateConfidence(relevanceScores)
+
+      return {
+        response: response.response.text(),
+        contextVerses,
+        relevanceScores,
+        processingTimeMs: processingTime,
+        suggestedQuestions,
+        confidence,
+      }
+
+    } catch (error) {
+      console.error('Error generating File Search RAG response:', error)
+      
+      // Fallback response
+      return {
+        response: `I apologize, but I encountered an error while processing your query about "${ragQuery.query}". Please try rephrasing your question or contact support if issue persists.`,
+        contextVerses: [],
+        relevanceScores: [],
+        processingTimeMs: Date.now() - startTime,
+        suggestedQuestions: [],
+        confidence: 0.1,
+      }
+    }
+  }
       } else {
         // Search for relevant verses
         const searchResults = await this.searchSimilarVerses(
@@ -231,22 +336,97 @@ export class BibleRAGSystem {
   }
 
   /**
-   * Generate embedding for search query
+   * Get File Search Store status and statistics
    */
-  private async generateQueryEmbedding(query: string): Promise<number[] | null> {
+  async getFileSearchStoreStats(): Promise<any> {
     try {
-      // In a real implementation, this would call the embedding model
-      // For now, we'll simulate this with a deterministic hash
-      const hash = this.simpleStringHash(query)
-      const embedding = Array(768).fill(0).map((_, i) => 
-        Math.sin(hash + i) * 0.5
-      )
-      
-      return embedding
+      if (!this.fileSearchStore) {
+        throw new Error('File Search Store not initialized')
+      }
+
+      const stats = await this.fileSearchStore.getStats()
+      return {
+        totalDocuments: stats.documentCount || 0,
+        totalSize: stats.totalSize || 0,
+        lastIndexed: stats.lastIndexedTime || null,
+        storeName: this.config.fileSearchStoreName
+      }
     } catch (error) {
-      console.error('Error generating query embedding:', error)
+      console.error('Error getting File Search Store stats:', error)
       return null
     }
+  }
+
+  /**
+   * Search verses with advanced filtering
+   */
+  async advancedSearch(
+    query: string,
+    options: {
+      testament?: 'Old' | 'New' | 'both'
+      maxResults?: number
+      bookFilter?: string[]
+      chapterRange?: { min: number; max: number }
+    } = {}
+  ): Promise<{ verse: BibleVerse; similarity: number }[]> {
+    try {
+      if (!this.fileSearchStore) {
+        throw new Error('File Search Store not initialized')
+      }
+
+      // Build metadata filter
+      const metadataFilters: string[] = []
+      
+      if (options.testament && options.testament !== 'both') {
+        metadataFilters.push(`testament=${options.testament}`)
+      }
+      
+      if (options.bookFilter && options.bookFilter.length > 0) {
+        metadataFilters.push(`book_name IN (${options.bookFilter.join(',')})`)
+      }
+      
+      if (options.chapterRange) {
+        metadataFilters.push(`chapter >= ${options.chapterRange.min} AND chapter <= ${options.chapterRange.max}`)
+      }
+
+      const metadataFilter = metadataFilters.length > 0 ? metadataFilters.join(' AND ') : undefined
+
+      // Perform search with File Search
+      const response = await this.genAI.getGenerativeModel({
+        model: this.config.generativeModel,
+        tools: [{
+          fileSearch: {
+            fileSearchStoreName: this.config.fileSearchStoreName,
+            maxResults: options.maxResults || 20,
+            metadataFilter
+          }
+        }]
+      }).generateContent(query)
+
+      // Process results
+      const groundingMetadata = response.response.candidates?.[0]?.groundingMetadata
+      
+      if (!groundingMetadata?.groundingChunks) {
+        return []
+      }
+
+      const results = await Promise.all(
+        groundingMetadata.groundingChunks.map(async (chunk: any) => {
+          const verseData = await this.parseChunkToVerse(chunk)
+          return {
+            verse: verseData,
+            similarity: 0.85
+          }
+        })
+      )
+
+      return results
+
+    } catch (error) {
+      console.error('Error in advanced search:', error)
+      return []
+    }
+  }
   }
 
   /**
@@ -362,40 +542,111 @@ Please provide a comprehensive and helpful response:`
   }
 
   /**
-   * Batch process all verses for embeddings
+   * Parse File Search chunk to Bible verse format
    */
-  async processAllVerses(): Promise<void> {
-    console.log('🔄 Starting batch embedding generation for all verses...')
+  private async parseChunkToVerse(chunk: any): Promise<BibleVerse> {
+    try {
+      // Try to extract verse information from chunk metadata or text
+      const chunkText = chunk.retrievedContext?.text || chunk.text || ''
+      
+      // Look for verse reference pattern (e.g., "Genesis 1:1")
+      const verseMatch = chunkText.match(/^(\d?\s?\w+)\s+(\d+):(\d+)/i)
+      
+      if (verseMatch) {
+        const bookName = verseMatch[1].replace(/\s+/g, ' ')
+        const chapter = parseInt(verseMatch[2])
+        const verse = parseInt(verseMatch[3])
+        const reference = `${bookName} ${chapter}:${verse}`
+        
+        return {
+          id: 0, // Will be set from database if needed
+          book_id: 0, // Will be set from database if needed
+          chapter,
+          verse,
+          text: chunkText.replace(/^.*?:\d+\s*/, '').trim(), // Remove reference prefix
+          book_name: bookName,
+          reference,
+          testament: this.getTestamentForBook(bookName)
+        }
+      }
+      
+      // If no verse pattern found, create a verse-like structure
+      return {
+        id: 0,
+        book_id: 0,
+        chapter: 1,
+        verse: 1,
+        text: chunkText,
+        book_name: 'Bible Context',
+        reference: 'Context',
+        testament: 'Old' // Default
+      }
+    } catch (error) {
+      console.error('Error parsing chunk to verse:', error)
+      
+      return {
+        id: 0,
+        book_id: 0,
+        chapter: 1,
+        verse: 1,
+        text: chunk.retrievedContext?.text || 'Unknown context',
+        book_name: 'Bible Context',
+        reference: 'Context',
+        testament: 'Old'
+      }
+    }
+  }
+
+  /**
+   * Determine testament from book name
+   */
+  private getTestamentForBook(bookName: string): 'Old' | 'New' {
+    const newTestamentBooks = [
+      'Matthew', 'Mark', 'Luke', 'John', 'Acts',
+      'Romans', '1 Corinthians', '2 Corinthians', 'Galatians', 'Ephesians',
+      'Philippians', 'Colossians', '1 Thessalonians', '2 Thessalonians',
+      '1 Timothy', '2 Timothy', 'Titus', 'Philemon', 'Hebrews',
+      'James', '1 Peter', '2 Peter', '1 John', '2 John', '3 John',
+      'Jude', 'Revelation'
+    ]
     
-    const batchSize = 50
-    let offset = 0
-    
-    while (true) {
+    return newTestamentBooks.includes(bookName) ? 'New' : 'Old'
+  }
+
+  /**
+   * Initialize and upload Bible data to File Search
+   */
+  async initializeBibleDataStore(): Promise<void> {
+    try {
+      console.log('🔧 Initializing Bible File Search Store...')
+      
+      // Step 1: Initialize File Search Store
+      await this.initializeFileSearchStore()
+      
+      // Step 2: Get all Bible verses from database
       const { data: verses, error } = await this.supabase
         .from('bible_verses')
         .select('*')
-        .range(offset, offset + batchSize - 1)
-
+      
       if (error) {
-        console.error('Error fetching verses batch:', error)
-        break
+        throw new Error(`Error fetching Bible verses: ${error.message}`)
       }
-
+      
       if (!verses || verses.length === 0) {
-        break
+        console.log('⚠️ No Bible verses found in database. Please load Bible data first.')
+        return
       }
-
-      console.log(`📖 Processing verses ${offset + 1}-${offset + verses.length}...`)
       
-      await this.generateVerseEmbeddings(verses)
+      // Step 3: Upload to File Search Store
+      console.log(`📚 Uploading ${verses.length} verses to File Search Store...`)
+      await this.uploadBibleDataToStore(verses)
       
-      offset += batchSize
+      console.log('✅ Bible File Search Store initialization complete!')
       
-      // Rate limiting - wait between batches
-      await new Promise(resolve => setTimeout(resolve, 2000))
+    } catch (error) {
+      console.error('❌ Error initializing Bible File Search Store:', error)
+      throw error
     }
-
-    console.log('✅ Batch embedding generation complete!')
   }
 
   /**

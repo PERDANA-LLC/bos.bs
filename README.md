@@ -1,31 +1,38 @@
-# AI-Powered Bible Study App
+# 🚀 AI Bible Study App - Google Gemini File Search RAG
 
-A comprehensive Bible study application leveraging Google's RAG (Retrieval-Augmented Generation) architecture with the King James Version (KJV) Bible as the authoritative text source.
+A comprehensive Bible study application leveraging **Google's revolutionary Gemini File Search RAG system** with the King James Version (KJV) Bible as the authoritative text source.
 
-## Technology Stack
+## ⚡ Revolutionary Technology Stack
 
 - **Frontend**: Next.js 14 with React 18, TypeScript, Tailwind CSS
-- **Backend**: Node.js with Express, TypeScript
+- **Backend**: Node.js with Express, TypeScript  
 - **Database**: Supabase (PostgreSQL + Auth + Storage)
-- **AI/ML**: Google Vertex AI, Gemini 1.5 Pro, Text Embedding Models
+- **🎯 AI/RAG**: **Google Gemini File Search** (Managed RAG-as-a-Service)
 - **Deployment**: Vercel (Frontend), Railway/Render (Backend)
 - **UI Components**: Headless UI, Radix UI, Lucide Icons
 
-## Features
+## 🎯 Revolutionary Features
 
-### Core Features
-- KJV Bible text with verse-level navigation
-- AI-powered insights and contextual analysis
-- Cross-reference discovery and Strong's concordance
-- Personalized study pathways and recommendations
-- Voice search and audio narration
+### ⚡ Google File Search RAG Integration
+- **Fully Managed RAG System** - No infrastructure complexity
+- **Automatic Chunking** - Semantic Bible verse breakdown
+- **Free Storage & Embeddings** - Revolutionary cost model
+- **Built-in Citations** - Automatic source attribution
+- **150+ File Format Support** - Structured Bible data ingestion
 
-### Advanced Features
-- RAG-powered theological queries
-- Historical and cultural context integration
-- Comparative passage analysis
-- Word study with Hebrew/Greek origins
-- Multi-modal study aids (timelines, maps, concept maps)
+### 📖 Core Bible Features  
+- **KJV Bible text** with verse-level navigation
+- **AI-powered insights** with contextual analysis
+- **Cross-reference discovery** and Strong's concordance
+- **Personalized study pathways** and recommendations
+- **Voice search** and audio narration
+
+### 🤖 Advanced AI Capabilities
+- **Semantic Bible search** beyond keyword matching
+- **Historical and cultural context** integration
+- **Comparative passage analysis** across testaments
+- **Word study** with Hebrew/Greek origins
+- **Multi-modal study aids** (timelines, maps, concept maps)
 
 ## Project Structure
 
@@ -47,21 +54,52 @@ ai-bible-study/
     └── deployment/          # Deployment guides
 ```
 
-## Getting Started
+## 🚀 Quick Start with File Search
 
 ### Prerequisites
 - Node.js 18+ 
 - npm/yarn/pnpm
-- Google Cloud Project with Vertex AI enabled
+- **Google AI API Key** (for Gemini File Search)
 - Supabase project
 
-### Installation
+### ⚡ Installation
 
-1. Clone the repository
-2. Install dependencies
-3. Set up environment variables
-4. Run database migrations
-5. Start development servers
+1. **Clone the repository**
+```bash
+git clone https://github.com/PERDANA-LLC/bos.bs.git
+cd bos.bs
+```
+
+2. **Install dependencies**
+```bash
+pnpm install
+```
+
+3. **Set up environment variables**
+```bash
+cp .env.example .env.local
+# Configure GOOGLE_AI_API_KEY and Supabase credentials
+```
+
+4. **Initialize Database & File Search**
+```bash
+# Start API server
+cd apps/api && npm run dev
+
+# Initialize Bible data and File Search store (one command!)
+curl -X POST http://localhost:3001/initialize-data
+```
+
+5. **Start development servers**
+```bash
+pnpm dev
+```
+
+### 🎯 Instant Access to Advanced Features
+- **AI Bible Chat**: http://localhost:3000/ai-chat
+- **Semantic Search**: http://localhost:3000/search  
+- **Bible Reader**: http://localhost:3000/bible
+- **File Search Status**: http://localhost:3001/file-search-status
 
 ## Environment Variables
 

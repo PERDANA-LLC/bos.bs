@@ -1,9 +1,10 @@
 import express from 'express'
-import { VertexAI } from '@google-cloud/vertexai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { AIQueryRequestSchema, AIQueryResponseSchema } from '@bible-study/types'
 import { AuthenticatedRequest } from '../middleware/auth'
+import { ragSystem } from '../index'
 
 const router = express.Router()
 
@@ -18,18 +19,10 @@ const supabaseUrl = process.env.SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// Initialize Gemini model
-const geminiModel = vertexAI.getGenerativeModel({
-  model: 'gemini-1.5-pro',
-  generationConfig: {
-    maxOutputTokens: 2048,
-    temperature: 0.3,
-    topP: 0.8,
-    topK: 40,
-  },
-})
+// Use the shared RAG system instance from the main app
+// File Search is handled by the ragSystem
 
-// Process AI query
+// Process AI query using Google File Search
 router.post('/query', async (req: AuthenticatedRequest, res) => {
   try {
     const startTime = Date.now()
@@ -40,57 +33,30 @@ router.post('/query', async (req: AuthenticatedRequest, res) => {
       return res.status(401).json({ error: 'User not authenticated' })
     }
 
-    // Fetch relevant verses for context
-    let contextVerses: any[] = []
-    if (context_verses && context_verses.length > 0) {
-      const { data, error } = await supabase
-        .from('bible_verses')
-        .select('*')
-        .in('id', context_verses)
+    console.log(`🤖 Processing AI query: "${query}" for user ${req.user.id}`)
 
-      if (error) {
-        console.error('Error fetching context verses:', error)
-      } else {
-        contextVerses = data || []
-      }
-    } else {
-      // Use semantic search to find relevant verses
-      const { data, error } = await supabase
-        .from('bible_verses')
-        .select('*')
-        .textSearch('text', query)
-        .limit(5)
-
-      if (!error) {
-        contextVerses = data || []
-      }
-    }
-
-    // Build the prompt for Gemini
-    const contextText = contextVerses
-      .map(verse => `${verse.reference}: ${verse.text}`)
-      .join('\n')
-
-    const prompt = buildPrompt(query, contextText, response_type)
-
-    // Generate response from Gemini
-    const result = await geminiModel.generateContent(prompt)
-    const response = result.response
-    const responseText = response.text()
+    // Use the shared RAG system with Google File Search
+    const ragResult = await ragSystem.generateResponse({
+      query,
+      maxContextVerses: aiRequest.maxContextVerses || 8,
+      testamentFilter: aiRequest.testamentFilter,
+      contextVerses
+    })
 
     const processingTime = Date.now() - startTime
 
     // Create AI response object
     const aiResponse: z.infer<typeof AIQueryResponseSchema> = {
-      response: responseText,
-      context_verses: contextVerses.map(verse => ({
+      response: ragResult.response,
+      context_verses: ragResult.contextVerses.map(verse => ({
         id: verse.id,
         reference: verse.reference,
         text: verse.text,
       })),
-      suggested_questions: generateRelatedQuestions(query, responseText),
-      confidence_score: 0.85, // Default confidence - could be made more sophisticated
-      processing_time_ms: processingTime,
+      related_topics: extractTopicsFromResponse(ragResult.response),
+      suggested_questions: ragResult.suggestedQuestions,
+      confidence_score: ragResult.confidence,
+      processing_time_ms: ragResult.processingTimeMs,
     }
 
     // Save query to database
@@ -99,10 +65,51 @@ router.post('/query', async (req: AuthenticatedRequest, res) => {
       .insert({
         user_id: req.user.id,
         query,
-        response: responseText,
-        context_verses: contextVerses.map(v => v.id),
-        response_time_ms: processingTime,
+        response: ragResult.response,
+        context_verses: ragResult.contextVerses.map(v => v.id),
+        response_time_ms: ragResult.processingTimeMs,
       })
+
+    const validatedResponse = AIQueryResponseSchema.parse(aiResponse)
+    res.json(validatedResponse)
+
+  } catch (error) {
+    console.error('Error processing AI query:', error)
+    res.status(500).json({ error: 'Failed to process AI query' })
+  }
+})
+
+// Search verses using File Search
+router.post('/search', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not authenticated' })
+    }
+
+    const { query, testament, maxResults, bookFilter } = req.body
+
+    console.log(`🔍 File Search request: "${query}"`)
+
+    // Use File Search for advanced search
+    const searchResults = await ragSystem.advancedSearch(query, {
+      testament: testament || 'both',
+      maxResults: maxResults || 20,
+      bookFilter: bookFilter
+    })
+
+    res.json({
+      success: true,
+      results: searchResults,
+      query,
+      total: searchResults.length,
+      powered_by: 'google-file-search'
+    })
+
+  } catch (error) {
+    console.error('Error in File Search:', error)
+    res.status(500).json({ error: 'Failed to perform File Search' })
+  }
+})
 
     const validatedResponse = AIQueryResponseSchema.parse(aiResponse)
     res.json(validatedResponse)
@@ -179,29 +186,50 @@ router.post('/rate/:queryId', async (req: AuthenticatedRequest, res) => {
 })
 
 // Helper functions
-function buildPrompt(query: string, contextText: string, responseType: string): string {
-  const basePrompt = `You are a knowledgeable Bible study assistant using the King James Version (KJV) Bible. 
-Please provide thoughtful, theologically sound insights based on the Scripture context provided.
+function extractTopicsFromResponse(response: string): string[] {
+  // Extract potential topics from AI response
+  const topicPatterns = [
+    /faith|grace|love|hope|salvation|redemption|prayer|worship/gi,
+    /creation|covenant|law|prophesy|wisdom|judgment/gi,
+    /christ|jesus|holy spirit|trinity|kingdom/gi,
+    /church|baptism|communion|discipleship|mission/gi
+  ]
 
-Context from Scripture:
-${contextText}
+  const topics = new Set<string>()
+  
+  topicPatterns.forEach(pattern => {
+    const matches = response.match(pattern)
+    if (matches) {
+      matches.forEach(match => {
+        const topic = match.toLowerCase()
+        if (topic.length > 3) { // Filter out very short matches
+          topics.add(topic)
+        }
+      })
+    }
+  })
 
-User Query: ${query}
+  return Array.from(topics).slice(0, 5)
+}
 
-Instructions:
-1. Base your answer primarily on the provided Scripture context
-2. Cite specific verses (Book Chapter:Verse) when referencing passages
-3. Provide historical and cultural context when relevant
-4. Be theologically careful and humble
-5. Suggest related passages for deeper study
-6. Focus on clear, practical application when appropriate`
+function generateRelatedQuestions(query: string, response: string): string[] {
+  // This is a simplified version - in production, you might use another AI call
+  const baseQuestions = [
+    "What is the historical context of this passage?",
+    "How does this relate to other parts of Scripture?",
+    "What practical application can I draw from this?",
+    "What does this teach about God's character?",
+    "How does this apply to modern life?",
+    "What are the key theological themes here?"
+  ]
 
-  const responseTypeInstructions = {
-    insight: "Provide deep insights and theological understanding of the passage.",
-    explanation: "Explain the meaning and context of the scripture clearly.",
-    application: "Focus on practical life applications and personal reflection.",
-    cross_reference: "Identify and explain related passages and biblical connections."
+  // Filter and return relevant questions based on query type
+  if (query.toLowerCase().includes('meaning') || query.toLowerCase().includes('explain')) {
+    return baseQuestions.filter((_, index) => index < 4)
   }
+
+  return baseQuestions.slice(0, 3)
+}
 
   const specificInstruction = responseTypeInstructions[responseType as keyof typeof responseTypeInstructions] || 
     responseTypeInstructions.insight
