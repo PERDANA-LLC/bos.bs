@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "apps/web/package.json",
+      "use": "@vercel/next"
+    },
+    {
+      "src": "apps/api/package.json",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "apps/api/index.ts"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "apps/web/$1"
+    }
+  ],
+  "env": {
+    "NEXT_PUBLIC_SUPABASE_URL": "@supabase-url",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@supabase-anon-key",
+    "GOOGLE_PROJECT_ID": "@google-project-id",
+    "GOOGLE_PRIVATE_KEY": "@google-private-key",
+    "GOOGLE_CLIENT_EMAIL": "@google-client-email",
+    "NEXTAUTH_SECRET": "@nextauth-secret"
+  },
+  "functions": {
+    "apps/api/index.ts": {
+      "maxDuration": 30
+    }
+  },
+  "installCommand": "pnpm install",
+  "buildCommand": "pnpm run build"
+}

@@ -1,0 +1,86 @@
+[
+  {
+    "from_verse": "Genesis 1:1",
+    "to_verse": "John 1:1",
+    "type": "thematic",
+    "description": "Both verses begin with 'In the beginning', connecting creation account with the Word",
+    "confidence": 0.95
+  },
+  {
+    "from_verse": "Genesis 3:15",
+    "to_verse": "John 3:16",
+    "type": "prophetic",
+    "description": "Protoevangelium pointing to Christ's redemptive work",
+    "confidence": 0.90
+  },
+  {
+    "from_verse": "Psalm 23:1",
+    "to_verse": "John 10:11",
+    "type": "thematic",
+    "description": "The Lord as shepherd imagery",
+    "confidence": 0.85
+  },
+  {
+    "from_verse": "Isaiah 53:5",
+    "to_verse": "1 Peter 2:24",
+    "type": "direct_quote",
+    "description": "Peter quotes Isaiah regarding Christ's suffering",
+    "confidence": 0.98
+  },
+  {
+    "from_verse": "Deuteronomy 18:15",
+    "to_verse": "Acts 3:22",
+    "type": "prophetic",
+    "description": "Peter references Moses' prophecy of a prophet like him",
+    "confidence": 0.92
+  },
+  {
+    "from_verse": "Genesis 12:3",
+    "to_verse": "Galatians 3:8",
+    "type": "thematic",
+    "description": "Paul explains that God preached the gospel to Abraham",
+    "confidence": 0.88
+  },
+  {
+    "from_verse": "Psalm 110:1",
+    "to_verse": "Hebrews 1:13",
+    "type": "direct_quote",
+    "description": "Author quotes Psalm to show Christ's superiority",
+    "confidence": 0.95
+  },
+  {
+    "from_verse": "Jeremiah 31:31",
+    "to_verse": "Hebrews 8:8",
+    "type": "prophetic",
+    "description": "New covenant prophecy quoted in Hebrews",
+    "confidence": 0.94
+  },
+  {
+    "from_verse": "Exodus 20:12",
+    "to_verse": "Ephesians 6:2",
+    "type": "thematic",
+    "description": "Command to honor parents connected with promise",
+    "confidence": 0.87
+  },
+  {
+    "from_verse": "Isaiah 7:14",
+    "to_verse": "Matthew 1:23",
+    "type": "direct_quote",
+    "description": "Virgin birth prophecy fulfilled in Matthew",
+    "confidence": 0.96
+  },
+  {
+    "from_verse": "Genesis 22:18",
+    "to_verse": "Galatians 3:16",
+    "type": "prophetic",
+    "description": "Paul explains that Abraham's seed refers to Christ",
+    "confidence": 0.91
+  },
+  {
+    "from_verse": "Psalm 16:10",
+    "to_verse": "Acts 2:31",
+    "type": "prophetic",
+    "description": "David's prophecy of resurrection applied to Christ",
+    "confidence": 0.89
+  }
+]

@@ -1,0 +1,83 @@
+[
+  {
+    "strong_number": "H7225",
+    "original_word": "רֵאשִׁית",
+    "transliteration": "rêshîyth",
+    "pronunciation": "ray-sheeth'",
+    "definition": "the first, in place, time, order or rank (specifically, a firstfruit):—beginning, chief(-est), first(-fruits, part), principal thing.",
+    "language": "Hebrew",
+    "kjv_occurrences": 506
+  },
+  {
+    "strong_number": "H430",
+    "original_word": "אֱלֹהִים",
+    "transliteration": "elohiym",
+    "pronunciation": "el-o-heem'",
+    "definition": "gods in the ordinary sense; but specifically used (in the plural thus, especially with the article) of the supreme God; occasionally applied by way of deference to magistrates; and sometimes as a superlative:—angels, X exceeding, God (gods)(-dess, -ly), X (very) great, judges, X mighty.",
+    "language": "Hebrew",
+    "kjv_occurrences": 2600
+  },
+  {
+    "strong_number": "H1254",
+    "original_word": "בָּרָא",
+    "transliteration": "bara'",
+    "pronunciation": "baw-raw'",
+    "definition": "to create; (qualified) to cut down; (by implication) to be fat:—create, creator, fat, make (fat).",
+    "language": "Hebrew",
+    "kjv_occurrences": 204
+  },
+  {
+    "strong_number": "G26",
+    "original_word": "ἀγάπη",
+    "transliteration": "agapē",
+    "pronunciation": "ag-ah'-pay",
+    "definition": "love, i.e. affection or benevolence; specially (plural) a love-feast:—(feast of) charity (love), (dearly) love(-ed).",
+    "language": "Greek",
+    "kjv_occurrences": 116
+  },
+  {
+    "strong_number": "G3588",
+    "original_word": "ὁ",
+    "transliteration": "ho",
+    "pronunciation": "ho",
+    "definition": "the, a definite article; including the feminine he (hay) and the neuter to (to); in all their inflections; the definite article; the:—he, she, it, they, them, same.",
+    "language": "Greek",
+    "kjv_occurrences": 19719
+  },
+  {
+    "strong_number": "G2316",
+    "original_word": "θεός",
+    "transliteration": "theos",
+    "pronunciation": "theh'-os",
+    "definition": "a deity, especially (with G3588) the supreme Divinity; figuratively, a magistrate; by Hebraism, very:—God, god.",
+    "language": "Greek",
+    "kjv_occurrences": 1344
+  },
+  {
+    "strong_number": "G3056",
+    "original_word": "λόγος",
+    "transliteration": "logos",
+    "pronunciation": "log'-os",
+    "definition": "something said (including the thought); by implication, a topic (subject of discourse), also reasoning (the mental faculty) or motive; by extension, a computation; specifically (with the article in John) the Divine Expression (i.e. Christ):—account, cause, communication, X concerning, doctrine, fame, X have to say, intent, matter, mouth, preaching, question, reason, X report, X shew, speaker, speech, talk, thing, + thought, utterance, word, work.",
+    "language": "Greek",
+    "kjv_occurrences": 330
+  },
+  {
+    "strong_number": "G444",
+    "ἄνθρωπος",
+    "transliteration": "anthrōpos",
+    "pronunciation": "anth'-ro-pos",
+    "definition": "man-faced, i.e. a human being:—certain, man.",
+    "language": "Greek",
+    "kjv_occurrences": 560
+  },
+  {
+    "strong_number": "H3068",
+    "original_word": "יְהוָה",
+    "transliteration": "Yhovah",
+    "pronunciation": "yeh-ho-vaw'",
+    "definition": "(the) self-Existent or Eternal; Jehovah, Jewish national name of God:—Jehovah, the Lord. Compare H3050, H3069.",
+    "language": "Hebrew",
+    "kjv_occurrences": 6519
+  }
+]
